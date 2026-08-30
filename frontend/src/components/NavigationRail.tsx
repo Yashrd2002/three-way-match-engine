@@ -1,9 +1,10 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Database, Upload, RefreshCw, LogOut, ShieldCheck } from 'lucide-react';
+import { api } from '../lib/api';
+import { LayoutDashboard, Database, Upload, RefreshCw, LogOut, ShieldCheck, User } from 'lucide-react';
 
 interface NavigationRailProps {
   onSeed?: () => void;
@@ -12,6 +13,20 @@ interface NavigationRailProps {
 
 export const NavigationRail: React.FC<NavigationRailProps> = ({ onSeed, isSeeding }) => {
   const pathname = usePathname();
+  const [user, setUser] = useState<any>(null);
+
+  useEffect(() => {
+    const saved = api.getUserFromStorage();
+    if (saved) {
+      setUser(saved);
+    }
+  }, []);
+
+  const handleLogout = () => {
+    if (confirm('Are you sure you want to log out?')) {
+      api.logout();
+    }
+  };
 
   return (
     <aside className="w-16 bg-slate-900 text-slate-300 flex flex-col items-center py-4 justify-between min-h-screen border-r border-slate-800 shrink-0">
@@ -55,8 +70,8 @@ export const NavigationRail: React.FC<NavigationRailProps> = ({ onSeed, isSeedin
         </nav>
       </div>
 
-      {/* Bottom Actions */}
-      <div className="flex flex-col items-center gap-3 w-full px-2">
+      {/* Bottom Actions & Logout */}
+      <div className="flex flex-col items-center gap-2 w-full px-2">
         {onSeed && (
           <button
             onClick={onSeed}
@@ -71,9 +86,16 @@ export const NavigationRail: React.FC<NavigationRailProps> = ({ onSeed, isSeedin
           </button>
         )}
 
-        <div className="p-3 text-slate-600">
-          <ShieldCheck className="w-5 h-5 text-emerald-500/60" />
-        </div>
+        <button
+          onClick={handleLogout}
+          title={user ? `Log out (${user.name || user.email})` : 'Log out'}
+          className="p-3 rounded-lg text-slate-400 hover:bg-rose-500/10 hover:text-rose-400 transition-colors flex justify-center items-center relative group"
+        >
+          <LogOut className="w-5 h-5" />
+          <span className="absolute left-16 bg-slate-900 text-rose-400 text-xs px-2 py-1 rounded border border-slate-700 whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50">
+            Sign Out {user ? `(${user.name})` : ''}
+          </span>
+        </button>
       </div>
     </aside>
   );

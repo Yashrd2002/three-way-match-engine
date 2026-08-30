@@ -42,12 +42,51 @@ export const api = {
   async login(username?: string, password?: string) {
     const data = await request<{ token: string; user: any }>('/auth/login', {
       method: 'POST',
-      body: JSON.stringify({ username, password })
+      body: JSON.stringify({ email: username, username, password })
     });
     if (typeof window !== 'undefined') {
       localStorage.setItem('auth_token', data.token);
+      localStorage.setItem('auth_user', JSON.stringify(data.user));
     }
     return data;
+  },
+
+  async signin(email: string, password?: string) {
+    return this.login(email, password);
+  },
+
+  async signup(name: string, email: string, password?: string) {
+    const data = await request<{ token: string; user: any }>('/auth/signup', {
+      method: 'POST',
+      body: JSON.stringify({ name, email, password })
+    });
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('auth_token', data.token);
+      localStorage.setItem('auth_user', JSON.stringify(data.user));
+    }
+    return data;
+  },
+
+  logout() {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('auth_token');
+      localStorage.removeItem('auth_user');
+      window.location.href = '/login';
+    }
+  },
+
+  getUserFromStorage() {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('auth_user');
+      if (saved) {
+        try { return JSON.parse(saved); } catch (e) {}
+      }
+    }
+    return null;
+  },
+
+  async getCurrentUser() {
+    return request<{ user: any }>('/auth/me');
   },
 
   async fetchMatch(poNumber: string) {
