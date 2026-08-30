@@ -188,21 +188,97 @@ router.get('/:id/file', async (req, res) => {
       return res.status(404).send('File not found');
     }
 
-    let fullPath = path.join(__dirname, '../../uploads', doc.filePath);
-    if (!fs.existsSync(fullPath)) {
-      // Fallback: check if standard sample file exists or return simple inline placeholder response
-      return res.status(404).send('File content not available on disk');
+    let fullPath = path.join(__dirname, '../../uploads', doc.filePath || '');
+    if (fs.existsSync(fullPath)) {
+      const ext = path.extname(fullPath).toLowerCase();
+      let contentType = 'application/pdf';
+      if (ext === '.jpg' || ext === '.jpeg') contentType = 'image/jpeg';
+      if (ext === '.png') contentType = 'image/png';
+
+      res.setHeader('Content-Type', contentType);
+      res.setHeader('Content-Disposition', `inline; filename="${doc.originalFilename || 'document' + ext}"`);
+      const stream = fs.createReadStream(fullPath);
+      return stream.pipe(res);
     }
 
-    const ext = path.extname(fullPath).toLowerCase();
-    let contentType = 'application/pdf';
-    if (ext === '.jpg' || ext === '.jpeg') contentType = 'image/jpeg';
-    if (ext === '.png') contentType = 'image/png';
+    // Fallback: Generate structured HTML visual preview for seeded or virtual documents
+    const docType = doc.grnNumber ? 'GRN' : doc.invoiceNumber ? 'TAX INVOICE' : 'PURCHASE ORDER';
+    const docNum = doc.poNumber || doc.grnNumber || doc.invoiceNumber || 'DOC-001';
+    const vendor = doc.vendorName || 'M/s AFP';
+    const date = doc.poDate || doc.grnDate || doc.invoiceDate || 'Mar 17, 2026';
 
-    res.setHeader('Content-Type', contentType);
-    res.setHeader('Content-Disposition', `inline; filename="${doc.originalFilename || 'document' + ext}"`);
-    const stream = fs.createReadStream(fullPath);
-    return stream.pipe(res);
+    const htmlContent = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>${docType} ${docNum}</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #f8fafc; margin: 0; padding: 24px; color: #0f172a; }
+    .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
+    .header { border-b: 2px solid #0f172a; padding-bottom: 16px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: flex-start; }
+    .title { font-size: 20px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; margin: 0; }
+    .meta { font-size: 12px; color: #64748b; margin-top: 4px; }
+    .badge { background: #0f172a; color: #fff; padding: 4px 10px; border-radius: 6px; font-weight: 700; font-size: 12px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; font-size: 12px; }
+    .box { background: #f1f5f9; padding: 12px; border-radius: 8px; }
+    .box-title { font-weight: 700; color: #475569; text-transform: uppercase; font-size: 10px; margin-bottom: 4px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 11px; }
+    th { background: #f1f5f9; text-align: left; padding: 8px; font-weight: 700; border-bottom: 1px solid #cbd5e1; }
+    td { padding: 8px; border-bottom: 1px solid #e2e8f0; }
+    .right { text-align: right; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="header">
+      <div>
+        <h1 class="title">${docType}</h1>
+        <div class="meta">Vendor: ${vendor} | Date: ${date}</div>
+      </div>
+      <span class="badge">Ref: ${docNum}</span>
+    </div>
+
+    <div class="grid">
+      <div class="box">
+        <div class="box-title">Document Reference</div>
+        <div><strong>PO Number:</strong> ${doc.poNumber || '-'}</div>
+        <div><strong>Doc Date:</strong> ${date}</div>
+      </div>
+      <div class="box">
+        <div class="box-title">Party Information</div>
+        <div><strong>Issued By:</strong> ${vendor}</div>
+        <div><strong>Ship To:</strong> CLOUDSTORE RETAIL PRIVATE LIMITED</div>
+      </div>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Item Code</th>
+          <th>Description</th>
+          <th class="right">Qty</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${(doc.items || []).map((item, idx) => `
+          <tr>
+            <td>${idx + 1}</td>
+            <td><strong>${item.itemCode}</strong></td>
+            <td>${item.description || '-'}</td>
+            <td class="right">${item.quantity || item.receivedQuantity || 0}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  </div>
+</body>
+</html>
+    `;
+
+    res.setHeader('Content-Type', 'text/html');
+    return res.send(htmlContent);
   } catch (err) {
     return res.status(500).send('Error reading document file');
   }
